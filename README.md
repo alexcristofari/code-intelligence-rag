@@ -1,111 +1,80 @@
-# 🧠 Code Intelligence RAG
+# Code Intelligence RAG
 
-> Um sistema RAG (Retrieval-Augmented Generation) que ingere repositórios de código e responde perguntas inteligentes sobre arquitetura, funcionalidades e fluxos do projeto.
+Um sistema corporativo de Retrieval-Augmented Generation (RAG) desenvolvido para analisar repositorios de codigo complexos e responder a perguntas sobre arquitetura, regras de negocio e fluxos de dados de forma automatizada.
 
-![Python](https://img.shields.io/badge/Python-3.11+-blue?style=flat-square&logo=python)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green?style=flat-square&logo=fastapi)
-![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-orange?style=flat-square&logo=openai)
-![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_DB-purple?style=flat-square)
+Este projeto foi construido nativamente para atuar como o "Cerebro Inteligente" do **MatchGame** (https://alexcristofari.com), um sistema de compatibilidade baseado em dados comportamentais. O objetivo e demonstrar capacidade avancada em Engenharia de IA, criando uma ferramenta que possa auxiliar desenvolvedores a navegar em codebases extensas.
 
-## 🎯 O que é?
+## O que o sistema faz?
 
-Aponte para qualquer repositório de código e faça perguntas em linguagem natural:
+O Code Intelligence ingere o repositorio do MatchGame (ou qualquer outro repositorio), convertendo todo o codigo-fonte em embeddings e salvando em um banco de dados vetorial. Em seguida, ele utiliza a API da OpenAI para gerar respostas baseadas unicamente no contexto matematico (vetorial) recuperado do proprio codigo.
 
-```
-Pergunta: "Como funciona a autenticação neste projeto?"
+Exemplo de uso em producao:
+- **Pergunta:** "Como funciona a autenticacao neste projeto?"
+- **Resposta:** O modelo le os vetores mais similares a "autenticacao", encontra os arquivos `auth.middleware.ts` e `auth.routes.ts`, interpreta o codigo TypeScript, e responde detalhando o uso de JWT e Bcrypt, alem de citar as linhas exatas onde as funcoes ocorrem no repositorio.
 
-Resposta: "A autenticação utiliza JWT tokens implementados em
-`auth.middleware.ts` (linhas 12-45). O fluxo é:
-1. Login via POST /auth/login
-2. Validação com bcrypt em validatePassword()
-3. Token JWT gerado com expiração de 24h
-📁 Fontes: auth.middleware.ts, auth.routes.ts, prisma/schema.prisma"
-```
+## Metricas e Desempenho no MatchGame
 
-## 🏗️ Arquitetura
+Durante a execucao primaria no repositorio base (MatchGame), o sistema demonstrou os seguintes dados de ingestao e processamento em um computador padrao (sem GPU dedicada para processamento local intenso):
 
-```
-  Repositório  →  Loader  →  Chunker  →  Embedder  →  ChromaDB
-                                                          │
-  Pergunta  →  Embedding  →  Busca Semântica  ────────────┘
-                                    │
-                             Top-K Chunks + Pergunta
-                                    │
-                               GPT-4o-mini
-                                    │
-                            Resposta + Fontes
-```
+- **Arquivos processados:** 146 (TypeScript, JSON, Markdown, Prisma, etc)
+- **Total de linhas de codigo ingeridas:** 46.815 linhas
+- **Chunks (trechos estruturados) indexados:** 2.951 chunks semanticos
+- **Tamanho processado (Raw):** 2.7 MB de codigo puro
+- **Tempo de ingestao:** ~55 segundos para carregar, fatiar e gerar 2.951 embeddings.
+- **Tamanho do espaco dimensional (Embeddings):** 1536 dimensoes via OpenAI text-embedding-3-small.
 
-## 🚀 Quick Start
+## Arquitetura do Sistema
 
-### 1. Instalar dependências
+O pipeline RAG foi dividido em 3 modulos independentes e escalaveis:
 
+1. **Ingestion Pipeline (ETL de Codigo):** 
+   - `Loader`: Percorre o sistema de arquivos ignorando diretorios irrelevantes (`node_modules`, `.git`, lockfiles).
+   - `Chunker`: Quebra o codigo em pedacos logicos (ex: por funcoes ou classes via Regex) e aplica _overlap_ para nao perder o contexto.
+   - `Embedder`: Converte o texto fatiado em vetores numericos densos.
+
+2. **Storage and Retrieval (Busca Vetorial):** 
+   - Utiliza `Numpy` para calculos de Cosine Similarity, garantindo altissima velocidade de busca matricial sem problemas de dependencia C++ (DLL) comuns no Windows. Em ambientes de producao Linux, pode facilmente ser substituido por ChromaDB ou Pinecone.
+   - Retorna os `Top K` chunks mais relevantes para a pergunta do usuario.
+
+3. **Generation Pipeline (LLM):** 
+   - Um modelo `gpt-4o-mini` recebe um "System Prompt" robusto junto com o contexto vetorial recuperado para fundamentar a resposta e evitar alucinacoes, sempre referenciando o arquivo de origem.
+
+## Tecnologias e Stack
+
+- **Linguagem:** Python 3.14 (Backend / Data Pipeline)
+- **LLM / Embeddings:** OpenAI API (`gpt-4o-mini` e `text-embedding-3-small`)
+- **Algebra Linear / Vector DB:** Numpy (Arrays multidimensionais e busca cosine similarity)
+- **API e Rotas:** FastAPI, Pydantic (Validacao de Esquemas)
+- **Interface e Deploy:** Streamlit (UI interativa para conversacao RAG)
+- **Controle de Dependencias:** Pyproject.toml / uv
+
+## Quick Start (Execucao Local)
+
+1. Instale as dependencias do projeto:
 ```bash
 pip install -e .
 ```
 
-### 2. Configurar API key
-
-```bash
-copy .env.example .env
-# Edite .env e coloque sua OPENAI_API_KEY
+2. Configure a variavel de ambiente em um arquivo `.env` na raiz:
+```env
+OPENAI_API_KEY=sua-chave-aqui
 ```
 
-### 3. Ingerir um repositório
-
+3. Inicie o processo de Ingestao em um repositorio alvo:
 ```bash
 python ingest.py C:\caminho\do\seu\repo
 ```
 
-### 4. Fazer perguntas
-
-**Via Streamlit (interface visual):**
+4. Suba a aplicacao Streamlit para realizar perguntas no chat:
 ```bash
 streamlit run app.py
 ```
 
-**Via API (FastAPI):**
-```bash
-uvicorn api:app --reload
-# Acesse: http://localhost:8000/docs
-```
+## Melhorias Futuras (Roadmap de Escala)
 
-## 🛠️ Stack Tecnológico
-
-| Componente | Tecnologia | Função |
-|---|---|---|
-| Linguagem | Python 3.11+ | Core do projeto |
-| Embeddings | OpenAI text-embedding-3-small | Converte texto em vetores |
-| LLM | OpenAI GPT-4o-mini | Gera respostas |
-| Vector DB | ChromaDB | Armazena e busca embeddings |
-| API | FastAPI | Endpoints REST |
-| UI | Streamlit | Interface de chat |
-
-## 📁 Estrutura
-
-```
-CodeIntelligence/
-├── src/
-│   ├── ingestion/        # Pipeline de ingestão
-│   │   ├── loader.py     # Carrega arquivos do repo
-│   │   ├── chunker.py    # Divide código em chunks
-│   │   └── embedder.py   # Gera embeddings
-│   ├── retrieval/        # Pipeline de busca
-│   │   ├── vector_store.py  # ChromaDB operations
-│   │   └── retriever.py     # Busca semântica
-│   ├── generation/       # Pipeline de geração
-│   │   └── generator.py  # Prompt + LLM
-│   └── config.py         # Configurações
-├── ingest.py             # CLI de ingestão
-├── api.py                # FastAPI server
-├── app.py                # Streamlit UI
-└── pyproject.toml        # Dependências
-```
-
-## 📝 Licença
-
-MIT
+- Implementacao de Busca Hibrida (BM25 + Semantic Search) para encontrar chaves de variaveis especificas.
+- Adicao de modelos Cross-Encoders para Re-ranking dos documentos antes da injecao no prompt do LLM.
+- Conversao de chunking estatico para Graph RAG, utilizando bancos baseados em grafos para mapear dependencias de import/export entre os arquivos Typescript do MatchGame.
 
 ---
-
-Feito com ❤️ como projeto de portfólio para AI Engineering
+Desenvolvido por Alexsander Cristofari como modulo avancado de Inteligencia Artificial associado ao projeto MatchGame.
